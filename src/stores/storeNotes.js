@@ -1,9 +1,11 @@
 import { defineStore } from "pinia";
 import {db} from "@/js/firebase";
 import { collection, getDocs, onSnapshot, doc, setDoc, deleteDoc, updateDoc, query, orderBy, limit, addDoc } from "firebase/firestore";
+import {useStoreAuth} from "@/stores/storeAuth";
 
-const notesCollectionRef = collection(db, "notes")
-const notesCollectionQuery = query(notesCollectionRef, orderBy("date", "desc"));
+let notesCollectionRef
+let notesCollectionQuery
+let getNotesSnapshot = null
 export const useStoreNotes = defineStore('storeNotes', {
   state: () => {
     return { 
@@ -22,6 +24,13 @@ export const useStoreNotes = defineStore('storeNotes', {
     }
   },
   actions: {
+    init(){
+      const storeAuth = useStoreAuth()
+      console.log(storeAuth.user.id)
+      notesCollectionRef = collection(db, "users", storeAuth.user.id, "notes");
+      notesCollectionQuery = query(notesCollectionRef, orderBy("date", "desc"));
+      this.getNotes()
+    },
     async getNotes(){
       // const querySnapshot = await getDocs(collection(db, "notes"));
       // querySnapshot.forEach((doc) => {
@@ -35,7 +44,14 @@ export const useStoreNotes = defineStore('storeNotes', {
 
       //firebase 功能
       this.notesLoaded = false
-      onSnapshot(notesCollectionQuery, (querySnapshot) => {
+
+      /* 取消監聽 變成Null */
+      if(getNotesSnapshot) getNotesSnapshot()
+      /* 
+        onSnapshot Hook 上的this將會繼續運行並一直監聽 直到你取消監聽 
+        如果不取消當更換user時候會一直監聽上一個user的notes
+      */
+      getNotesSnapshot = onSnapshot(notesCollectionQuery, (querySnapshot) => {
         let notes = [];
         querySnapshot.forEach((doc) => {
           let note = {
@@ -48,6 +64,9 @@ export const useStoreNotes = defineStore('storeNotes', {
         this.notes = notes;
         this.notesLoaded = true
       })
+    },
+    clearNotes(){
+      this.notes = []
     },
     async addNote(newNoteContent) {
       let currentDate = new Date().getTime(), //會獲取整數
